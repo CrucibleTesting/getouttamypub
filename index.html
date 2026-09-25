@@ -22,25 +22,34 @@
       max-width: 800px;
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
       color: #fff;
       z-index: 10;
     }
-    .health-bar-container {
+    .health-bar-container, .cooldown-bar-container {
       width: 100%;
       background: rgba(255, 255, 255, 0.2);
       border: 2px solid #fff;
-      height: 24px;
       border-radius: 4px;
       overflow: hidden;
     }
-    .health-bar {
+    .health-bar-container { height: 24px; }
+    .cooldown-bar-container {
+      height: 10px;
+      margin-top: 4px;
+      border-width: 1px;
+    }
+    .health-bar, .cooldown-bar {
       height: 100%;
       width: 100%;
-      transition: width 0.1s ease-out;
+      transition: width 0.1s linear;
     }
     #p1-health { background: linear-gradient(90deg, #ff0000, #ff5555); }
     #p2-health { background: linear-gradient(90deg, #00ff00, #55ff55); float: right; }
+    
+    #p1-cooldown { background: #00e5ff; width: 100%; }
+    #p2-cooldown { background: #00e5ff; width: 100%; float: right; }
+
     .player-label {
       font-size: 14px;
       text-transform: uppercase;
@@ -110,7 +119,7 @@
       text-align: center;
     }
 
-    /* PORTRAIT OVERLAY WARNING (MOBILE TOUCH DEVICES ONLY) */
+    /* PORTRAIT OVERLAY WARNING */
     #orientation-warning {
       display: none;
       position: fixed;
@@ -149,12 +158,18 @@
       <div class="health-bar-container">
         <div id="p1-health" class="health-bar"></div>
       </div>
+      <div class="cooldown-bar-container">
+        <div id="p1-cooldown" class="cooldown-bar"></div>
+      </div>
     </div>
     <div id="timer">99</div>
     <div style="width: 42%;">
       <span id="p2-label" class="player-label">Dot Cotton</span>
       <div class="health-bar-container">
         <div id="p2-health" class="health-bar"></div>
+      </div>
+      <div class="cooldown-bar-container">
+        <div id="p2-cooldown" class="cooldown-bar"></div>
       </div>
     </div>
   </div>
@@ -213,32 +228,27 @@
     scene.add(wall);
 
     // --- 2. FIGHTERS SETUP ---
-    function createFighter(color, xPos) {
+    function createFighter(color, xPos, cdElId) {
       const group = new THREE.Group();
 
-      // Body
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.8, 0.6), new THREE.MeshStandardMaterial({ color }));
       body.position.y = 0.9;
       group.add(body);
 
-      // Head
       const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffccaa }));
       head.position.y = 2.1;
       group.add(head);
 
-      // Fist (Punch)
       const fist = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: 0xffccaa }));
       fist.position.set(0.5, 1.2, 0);
       fist.visible = false;
       group.add(fist);
 
-      // Foot (Kick)
       const foot = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.6), new THREE.MeshStandardMaterial({ color: 0x222222 }));
       foot.position.set(0.5, 0.4, 0);
       foot.visible = false;
       group.add(foot);
 
-      // Front Arc Shield for Blocking
       const arcGeometry = new THREE.RingGeometry(0.8, 1.1, 16, 1, 0, Math.PI * 0.6);
       const arcMaterial = new THREE.MeshBasicMaterial({
         color: 0x00aaff,
@@ -262,22 +272,24 @@
         health: 100,
         isAttacking: false,
         isBlocking: false,
+        blockTimer: null,
+        projectileTimer: 0,
+        cooldownEl: document.getElementById(cdElId),
         vy: 0,
         isGrounded: true
       };
     }
 
-    const p1 = createFighter(0xd32f2f, -3); // Phil Mitchell
-    const p2 = createFighter(0x2e7d32, 3);  // Dot Cotton
+    const p1 = createFighter(0xd32f2f, -3, 'p1-cooldown'); // Phil Mitchell
+    const p2 = createFighter(0x2e7d32, 3, 'p2-cooldown');  // Dot Cotton
     p2.mesh.scale.x = -1;
 
     scene.add(p1.mesh);
     scene.add(p2.mesh);
 
-    // Projectile Pool
     const projectiles = [];
 
-    function spawnProjectile(x, direction, color) {
+    function spawnProjectile(x, direction, color, owner) {
       const geo = new THREE.SphereGeometry(0.2, 8, 8);
       const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5 });
       const proj = new THREE.Mesh(geo, mat);
@@ -287,7 +299,7 @@
       projectiles.push({
         mesh: proj,
         dir: direction,
-        owner: direction > 0 ? p1 : p2,
+        owner: owner,
         target: direction > 0 ? p2 : p1,
         targetEl: direction > 0 ? 'p2-health' : 'p1-health'
       });
@@ -298,26 +310,28 @@
     let gameOver = false;
 
     window.addEventListener('keydown', (e) => {
-      keys[e.code] = true;
       if (gameOver) return;
 
-      // Jump (W or ArrowUp)
+      // Prevent key repeat triggering multiple blocks when held down
+      if (!keys[e.code]) {
+        keys[e.code] = true;
+
+        if (e.code === 'KeyS' || e.code === 'ArrowDown') {
+          triggerTimedBlock(p1);
+        }
+        if (e.code === 'KeyJ' || e.code === 'Space') performPunch(p1, p2, 'p2-health');
+        if (e.code === 'KeyK') performKick(p1, p2, 'p2-health');
+        if (e.code === 'KeyL') performSpecial(p1, 1, 0xffff00);
+      }
+
       if ((e.code === 'KeyW' || e.code === 'ArrowUp') && p1.isGrounded) {
         p1.vy = 0.22;
         p1.isGrounded = false;
       }
-
-      // Punch (J or Space)
-      if (e.code === 'KeyJ' || e.code === 'Space') performPunch(p1, p2, 'p2-health');
-      // Kick (K)
-      if (e.code === 'KeyK') performKick(p1, p2, 'p2-health');
-      // Special (L)
-      if (e.code === 'KeyL') performSpecial(p1, 1, 0xffff00);
     });
 
     window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-    // Mobile Touch Event Bindings
     const bindTouch = (id, startFn, endFn) => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -333,12 +347,27 @@
         p1.isGrounded = false;
       }
     });
-    bindTouch('btn-block', () => keys['KeyS'] = true, () => keys['KeyS'] = false);
+    bindTouch('btn-block', () => triggerTimedBlock(p1));
     bindTouch('btn-punch', () => performPunch(p1, p2, 'p2-health'));
     bindTouch('btn-kick', () => performKick(p1, p2, 'p2-health'));
     bindTouch('btn-special', () => performSpecial(p1, 1, 0xffff00));
 
-    // --- 4. COMBAT ACTIONS ---
+    // --- 4. INSTANT BLOCKING MECHANIC ---
+    function triggerTimedBlock(fighter) {
+      if (fighter.isBlocking || gameOver) return;
+      
+      // Instant deployment
+      fighter.isBlocking = true;
+      fighter.shield.visible = true;
+
+      // Shield remains up for exactly 0.8 seconds
+      fighter.blockTimer = setTimeout(() => {
+        fighter.isBlocking = false;
+        fighter.shield.visible = false;
+        fighter.blockTimer = null;
+      }, 800);
+    }
+
     function performPunch(attacker, defender, targetHpEl) {
       if (attacker.isAttacking || gameOver) return;
       attacker.isAttacking = true;
@@ -386,10 +415,13 @@
     }
 
     function performSpecial(attacker, direction, color) {
-      if (attacker.isAttacking || gameOver) return;
-      attacker.isAttacking = true;
+      if (attacker.isAttacking || attacker.projectileTimer > 0 || gameOver) return;
       
-      spawnProjectile(attacker.mesh.position.x + (direction * 0.8), direction, color);
+      attacker.isAttacking = true;
+      attacker.projectileTimer = 5.0; // 5 seconds recharge
+      attacker.cooldownEl.style.width = '0%';
+      
+      spawnProjectile(attacker.mesh.position.x + (direction * 0.8), direction, color, attacker);
 
       setTimeout(() => { attacker.isAttacking = false; }, 400);
     }
@@ -413,6 +445,12 @@
 
       const dist = p2.mesh.position.x - p1.mesh.position.x;
 
+      // Reactive instant blocking when player attacks or fires a projectile close by
+      const incomingProj = projectiles.find(p => p.owner === p1 && p.mesh.position.x > p2.mesh.position.x - 2.5);
+      if ((incomingProj || (dist < 1.8 && p1.isAttacking)) && !p2.isBlocking) {
+        triggerTimedBlock(p2);
+      }
+
       if (dist > 3) {
         p2.mesh.position.x -= 0.04;
       } else if (dist < 1.2) {
@@ -423,11 +461,11 @@
         aiCooldown = true;
         const rand = Math.random();
 
-        if (dist < 1.8 && rand < 0.35) {
+        if (dist < 1.8 && rand < 0.4) {
           performPunch(p2, p1, 'p1-health');
-        } else if (dist < 2.0 && rand < 0.65) {
+        } else if (dist < 2.0 && rand < 0.7) {
           performKick(p2, p1, 'p1-health');
-        } else {
+        } else if (p2.projectileTimer <= 0) {
           performSpecial(p2, -1, 0x00ffff);
         }
 
@@ -453,19 +491,26 @@
     }, 1000);
 
     // --- 6. GAME LOOP ---
-    function animate() {
+    let lastTime = performance.now();
+
+    function animate(now) {
       requestAnimationFrame(animate);
 
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
       if (!gameOver) {
-        // Evaluate Blocking State for Player 1
-        p1.isBlocking = Boolean(keys['KeyS'] || keys['ArrowDown']);
-        p1.shield.visible = p1.isBlocking;
+        // Update Projectile Timers & Recharge Bars
+        [p1, p2].forEach(fighter => {
+          if (fighter.projectileTimer > 0) {
+            fighter.projectileTimer = Math.max(0, fighter.projectileTimer - dt);
+            const pct = ((5 - fighter.projectileTimer) / 5) * 100;
+            fighter.cooldownEl.style.width = pct + '%';
+          }
+        });
 
-        // Player 2 Shield Visibility
-        p2.shield.visible = p2.isBlocking;
-
-        // Movement
-        const moveSpeed = p1.isBlocking ? 0.02 : 0.08;
+        // Player 1 Movement
+        const moveSpeed = 0.08;
         if ((keys['KeyA'] || keys['ArrowLeft']) && p1.mesh.position.x > -8) {
           p1.mesh.position.x -= moveSpeed;
         }
@@ -515,7 +560,7 @@
       renderer.render(scene, camera);
     }
 
-    animate();
+    animate(performance.now());
 
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
