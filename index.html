@@ -110,8 +110,8 @@
       text-align: center;
     }
 
-    /* LANDSCAPE OVERLAY WARNING (MOBILE ONLY) */
-    #portrait-warning {
+    /* PORTRAIT OVERLAY WARNING (MOBILE TOUCH DEVICES ONLY) */
+    #orientation-warning {
       display: none;
       position: fixed;
       top: 0;
@@ -129,8 +129,8 @@
       box-sizing: border-box;
     }
 
-    @media (orientation: landscape) and (max-height: 600px) and (hover: none) {
-      #portrait-warning {
+    @media (orientation: portrait) and (hover: none) {
+      #orientation-warning {
         display: flex;
       }
     }
@@ -139,8 +139,8 @@
 </head>
 <body>
 
-  <div id="portrait-warning">
-    Please rotate your device to portrait mode to play.
+  <div id="orientation-warning">
+    Please rotate your device to landscape mode to play.
   </div>
 
   <div id="ui">
@@ -395,7 +395,6 @@
     }
 
     function applyDamage(target, hpElementId, amount) {
-      // Complete damage negation if target is blocking
       if (target.isBlocking) return;
 
       target.health = Math.max(0, target.health - amount);
@@ -458,14 +457,14 @@
       requestAnimationFrame(animate);
 
       if (!gameOver) {
-        // Evaluate Blocking State for Player 1 (S key or Down Arrow)
+        // Evaluate Blocking State for Player 1
         p1.isBlocking = Boolean(keys['KeyS'] || keys['ArrowDown']);
         p1.shield.visible = p1.isBlocking;
 
-        // Player 2 Shield state visibility
+        // Player 2 Shield Visibility
         p2.shield.visible = p2.isBlocking;
 
-        // Player 1 Horizontal Movement
+        // Movement
         const moveSpeed = p1.isBlocking ? 0.02 : 0.08;
         if ((keys['KeyA'] || keys['ArrowLeft']) && p1.mesh.position.x > -8) {
           p1.mesh.position.x -= moveSpeed;
@@ -474,7 +473,7 @@
           p1.mesh.position.x += moveSpeed;
         }
 
-        // Apply Jump Gravity Physics
+        // Jump Physics
         if (!p1.isGrounded) {
           p1.mesh.position.y += p1.vy;
           p1.vy -= 0.01;
@@ -489,16 +488,14 @@
         // AI Logic
         updateAI();
 
-        // Update Projectiles & Handle Block Detection
+        // Update Projectiles
         for (let i = projectiles.length - 1; i >= 0; i--) {
           const p = projectiles[i];
           p.mesh.position.x += p.dir * 0.15;
 
-          // Check Collisions
           if (Math.abs(p.mesh.position.x - p.target.mesh.position.x) < 0.8 &&
               Math.abs(p.mesh.position.y - 1.2) < 1.2) {
             
-            // If target is actively blocking, absorb projectile completely without taking damage
             if (!p.target.isBlocking) {
               applyDamage(p.target, p.targetEl, 20);
             }
@@ -520,7 +517,6 @@
 
     animate();
 
-    // Window Resize Handler
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
