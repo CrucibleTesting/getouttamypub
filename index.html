@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Eastenders Turbo Fighter</title>
   <style>
     body {
@@ -11,13 +11,14 @@
       font-family: 'Arial Black', Impact, sans-serif;
       background-color: #000;
       user-select: none;
+      touch-action: manipulation;
     }
     #ui {
       position: absolute;
-      top: 20px;
+      top: 15px;
       left: 50%;
       transform: translateX(-50%);
-      width: 80%;
+      width: 90%;
       max-width: 800px;
       display: flex;
       justify-content: space-between;
@@ -26,60 +27,83 @@
       z-index: 10;
     }
     .health-bar-container {
-      width: 40%;
+      width: 100%;
       background: rgba(255, 255, 255, 0.2);
-      border: 3px solid #fff;
-      height: 30px;
-      border-radius: 5px;
+      border: 2px solid #fff;
+      height: 24px;
+      border-radius: 4px;
       overflow: hidden;
-      box-shadow: 0 0 10px rgba(0,0,0,0.5);
     }
     .health-bar {
       height: 100%;
       width: 100%;
-      transition: width 0.2s ease-out;
+      transition: width 0.1s ease-out;
     }
     #p1-health { background: linear-gradient(90deg, #ff0000, #ff5555); }
     #p2-health { background: linear-gradient(90deg, #00ff00, #55ff55); float: right; }
     .player-label {
-      position: absolute;
-      top: -25px;
-      font-size: 16px;
+      font-size: 14px;
       text-transform: uppercase;
-      letter-spacing: 1px;
       text-shadow: 2px 2px #000;
+      display: block;
+      margin-bottom: 2px;
     }
-    #p1-label { left: 0; color: #ff5555; }
-    #p2-label { right: 0; color: #55ff55; }
+    #p1-label { color: #ff5555; }
+    #p2-label { color: #55ff55; text-align: right; }
     #timer {
-      font-size: 32px;
+      font-size: 28px;
       background: #000;
       border: 2px solid #fff;
-      padding: 5px 15px;
+      padding: 2px 12px;
       border-radius: 5px;
       color: #ffcc00;
+      margin: 0 10px;
     }
-    #controls-hint {
+    
+    /* MOBILE TOUCH CONTROLS */
+    #mobile-controls {
       position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: #fff;
-      background: rgba(0,0,0,0.7);
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-size: 14px;
-      text-align: center;
+      bottom: 15px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 15px;
+      box-sizing: border-box;
       z-index: 10;
-      border: 1px solid #444;
     }
+    .dpad, .action-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    .touch-btn {
+      width: 55px;
+      height: 55px;
+      background: rgba(255, 255, 255, 0.25);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      color: #fff;
+      font-size: 18px;
+      font-weight: bold;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .touch-btn:active {
+      background: rgba(255, 255, 255, 0.6);
+    }
+    .special-btn {
+      background: rgba(255, 204, 0, 0.4);
+      border-color: #ffcc00;
+    }
+
     #game-over {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       color: #ffcc00;
-      font-size: 48px;
+      font-size: 40px;
       text-shadow: 4px 4px #000;
       display: none;
       z-index: 20;
@@ -91,14 +115,14 @@
 <body>
 
   <div id="ui">
-    <div style="position: relative; width: 40%;">
+    <div style="width: 42%;">
       <span id="p1-label" class="player-label">Phil Mitchell</span>
       <div class="health-bar-container">
         <div id="p1-health" class="health-bar"></div>
       </div>
     </div>
     <div id="timer">99</div>
-    <div style="position: relative; width: 40%;">
+    <div style="width: 42%;">
       <span id="p2-label" class="player-label">Dot Cotton</span>
       <div class="health-bar-container">
         <div id="p2-health" class="health-bar"></div>
@@ -106,8 +130,18 @@
     </div>
   </div>
 
-  <div id="controls-hint">
-    <b>Controls:</b> Move: <code>A</code> / <code>D</code> | Attack: <code>Spacebar</code>
+  <div id="mobile-controls">
+    <div class="dpad">
+      <div class="touch-btn" id="btn-left">◄</div>
+      <div class="touch-btn" id="btn-right">►</div>
+      <div class="touch-btn" id="btn-jump">▲</div>
+      <div class="touch-btn" id="btn-block">🛡</div>
+    </div>
+    <div class="action-buttons">
+      <div class="touch-btn" id="btn-punch">P</div>
+      <div class="touch-btn" id="btn-kick">K</div>
+      <div class="touch-btn special-btn" id="btn-special">S</div>
+    </div>
   </div>
 
   <div id="game-over">
@@ -127,160 +161,307 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // --- 2. LIGHTING & STAGE (Queen Vic / Albert Square Concept) ---
+    // Light Setup
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
-
     const dirLight = new THREE.DirectionalLight(0xffaa55, 0.8);
     dirLight.position.set(0, 10, 5);
     scene.add(dirLight);
 
-    // Arena Floor
-    const floorGeo = new THREE.PlaneGeometry(20, 10);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
+    // Stage
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(20, 10),
+      new THREE.MeshStandardMaterial({ color: 0x333333 })
+    );
     floor.rotation.x = -Math.PI / 2;
     scene.add(floor);
 
-    // Background Wall
-    const wallGeo = new THREE.PlaneGeometry(20, 8);
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x8b263e }); // Queen Vic Pub Red
-    const wall = new THREE.Mesh(wallGeo, wallMat);
+    const wall = new THREE.Mesh(
+      new THREE.PlaneGeometry(20, 8),
+      new THREE.MeshStandardMaterial({ color: 0x8b263e })
+    );
     wall.position.set(0, 4, -5);
     scene.add(wall);
 
-    // --- 3. FIGHTERS ---
+    // --- 2. FIGHTERS SETUP ---
     function createFighter(color, xPos) {
       const group = new THREE.Group();
 
-      // Body Mesh
-      const bodyGeo = new THREE.BoxGeometry(0.8, 1.8, 0.6);
-      const bodyMat = new THREE.MeshStandardMaterial({ color });
-      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      // Body
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.8, 0.6), new THREE.MeshStandardMaterial({ color }));
       body.position.y = 0.9;
       group.add(body);
 
-      // Head Mesh
-      const headGeo = new THREE.SphereGeometry(0.35, 16, 16);
-      const headMat = new THREE.MeshStandardMaterial({ color: 0xffccaa });
-      const head = new THREE.Mesh(headGeo, headMat);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffccaa }));
       head.position.y = 2.1;
       group.add(head);
 
-      // Fist (Attack Mesh)
-      const fistGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-      const fistMat = new THREE.MeshStandardMaterial({ color: 0xffccaa });
-      const fist = new THREE.Mesh(fistGeo, fistMat);
+      // Fist (Punch)
+      const fist = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: 0xffccaa }));
       fist.position.set(0.5, 1.2, 0);
       fist.visible = false;
       group.add(fist);
+
+      // Foot (Kick)
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.6), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+      foot.position.set(0.5, 0.4, 0);
+      foot.visible = false;
+      group.add(foot);
 
       group.position.x = xPos;
       
       return {
         mesh: group,
         fist: fist,
+        foot: foot,
         health: 100,
         isAttacking: false,
-        velocity: 0
+        isBlocking: false,
+        vy: 0,
+        isGrounded: true
       };
     }
 
-    const p1 = createFighter(0xd32f2f, -3); // Phil Mitchell (Red)
-    const p2 = createFighter(0x2e7d32, 3);  // Dot Cotton (Green)
-    
-    // Turn Dot Cotton to face left
+    const p1 = createFighter(0xd32f2f, -3); // Phil Mitchell
+    const p2 = createFighter(0x2e7d32, 3);  // Dot Cotton
     p2.mesh.scale.x = -1;
 
     scene.add(p1.mesh);
     scene.add(p2.mesh);
 
-    // --- 4. GAME STATE & CONTROLS ---
+    // Projectile Pool
+    const projectiles = [];
+
+    function spawnProjectile(x, direction, color, type) {
+      const geo = type === 'bottle' ? new THREE.CylinderGeometry(0.12, 0.12, 0.5) : new THREE.CylinderGeometry(0.05, 0.05, 0.4);
+      const mat = new THREE.MeshStandardMaterial({ color, transparent: true, opacity: type === 'bottle' ? 0.75 : 1.0 });
+      const proj = new THREE.Mesh(geo, mat);
+      proj.rotation.z = Math.PI / 2;
+      proj.position.set(x, p1.mesh.position.y + 1.5, 0);
+      scene.add(proj);
+
+      projectiles.push({
+        mesh: proj,
+        dir: direction,
+        owner: direction > 0 ? p1 : p2,
+        target: direction > 0 ? p2 : p1,
+        targetEl: direction > 0 ? 'p2-health' : 'p1-health'
+      });
+    }
+
+    // --- 3. INPUT & CONTROLS ---
     const keys = {};
     let gameOver = false;
 
     window.addEventListener('keydown', (e) => {
       keys[e.code] = true;
-      if (e.code === 'Space' && !p1.isAttacking && !gameOver) {
-        performAttack();
+      if (gameOver) return;
+
+      // Jump (W or ArrowUp)
+      if ((e.code === 'KeyW' || e.code === 'ArrowUp') && p1.isGrounded) {
+        p1.vy = 0.22;
+        p1.isGrounded = false;
+      }
+
+      // Punch (J or Space)
+      if (e.code === 'KeyJ' || e.code === 'Space') performPunch(p1, p2, 'p2-health');
+      // Kick (K)
+      if (e.code === 'KeyK') performKick(p1, p2, 'p2-health');
+      // Special (L) - Bottle Throw
+      if (e.code === 'KeyL') performSpecial(p1, 1, 0x55aa77, 'bottle');
+    });
+
+    window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+    // Mobile Touch Event Bindings
+    const bindTouch = (id, startFn, endFn) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); startFn(); });
+      el.addEventListener('touchend', (e) => { e.preventDefault(); if (endFn) endFn(); });
+    };
+
+    bindTouch('btn-left', () => keys['KeyA'] = true, () => keys['KeyA'] = false);
+    bindTouch('btn-right', () => keys['KeyD'] = true, () => keys['KeyD'] = false);
+    bindTouch('btn-jump', () => {
+      if (p1.isGrounded) {
+        p1.vy = 0.22;
+        p1.isGrounded = false;
       }
     });
+    bindTouch('btn-block', () => keys['KeyS'] = true, () => keys['KeyS'] = false);
+    bindTouch('btn-punch', () => performPunch(p1, p2, 'p2-health'));
+    bindTouch('btn-kick', () => performKick(p1, p2, 'p2-health'));
+    bindTouch('btn-special', () => performSpecial(p1, 1, 0x55aa77, 'bottle'));
 
-    window.addEventListener('keyup', (e) => {
-      keys[e.code] = false;
-    });
+    // --- 4. COMBAT ACTIONS ---
+    function performPunch(attacker, defender, targetHpEl) {
+      if (attacker.isAttacking || gameOver) return;
+      attacker.isAttacking = true;
+      attacker.fist.visible = true;
 
-    function performAttack() {
-      p1.isAttacking = true;
-      p1.fist.visible = true;
+      let f = 0;
+      const interval = setInterval(() => {
+        f++;
+        attacker.fist.position.x = 0.5 + Math.sin((f / 8) * Math.PI) * 0.5;
 
-      // Animate punch forward
-      let punchFrame = 0;
-      const punchInterval = setInterval(() => {
-        punchFrame++;
-        p1.fist.position.x = 0.5 + Math.sin((punchFrame / 10) * Math.PI) * 0.6;
-
-        // Hit Detection
-        const distance = Math.abs(p1.mesh.position.x - p2.mesh.position.x);
-        if (distance < 1.6 && punchFrame === 5 && !gameOver) {
-          p2.health = Math.max(0, p2.health - 15);
-          document.getElementById('p2-health').style.width = p2.health + '%';
-          
-          // Hit recoil
-          p2.mesh.position.x += 0.3;
-
-          if (p2.health <= 0) {
-            endGame('PHIL MITCHELL WINS!');
-          }
+        if (f === 4 && Math.abs(attacker.mesh.position.x - defender.mesh.position.x) < 1.6) {
+          applyDamage(defender, targetHpEl, 10);
         }
 
-        if (punchFrame >= 10) {
-          clearInterval(punchInterval);
-          p1.fist.visible = false;
-          p1.fist.position.x = 0.5;
-          p1.isAttacking = false;
+        if (f >= 8) {
+          clearInterval(interval);
+          attacker.fist.visible = false;
+          attacker.fist.position.x = 0.5;
+          attacker.isAttacking = false;
         }
       }, 20);
     }
 
-    function endGame(message) {
+    function performKick(attacker, defender, targetHpEl) {
+      if (attacker.isAttacking || gameOver) return;
+      attacker.isAttacking = true;
+      attacker.foot.visible = true;
+
+      let f = 0;
+      const interval = setInterval(() => {
+        f++;
+        attacker.foot.position.x = 0.5 + Math.sin((f / 10) * Math.PI) * 0.7;
+
+        if (f === 5 && Math.abs(attacker.mesh.position.x - defender.mesh.position.x) < 1.8) {
+          applyDamage(defender, targetHpEl, 15);
+        }
+
+        if (f >= 10) {
+          clearInterval(interval);
+          attacker.foot.visible = false;
+          attacker.foot.position.x = 0.5;
+          attacker.isAttacking = false;
+        }
+      }, 20);
+    }
+
+    function performSpecial(attacker, direction, color, type) {
+      if (attacker.isAttacking || gameOver) return;
+      attacker.isAttacking = true;
+      
+      spawnProjectile(attacker.mesh.position.x + (direction * 0.8), direction, color, type);
+
+      setTimeout(() => { attacker.isAttacking = false; }, 400);
+    }
+
+    function applyDamage(target, hpElementId, amount) {
+      const finalAmount = target.isBlocking ? amount * 0.2 : amount;
+      target.health = Math.max(0, target.health - finalAmount);
+      document.getElementById(hpElementId).style.width = target.health + '%';
+      target.mesh.position.x += (target === p1 ? -0.2 : 0.2);
+
+      if (target.health <= 0) {
+        endGame(target === p2 ? 'PHIL MITCHELL WINS!' : 'DOT COTTON WINS!');
+      }
+    }
+
+    // --- 5. CPU AI FOR DOT COTTON ---
+    let aiCooldown = false;
+    function updateAI() {
+      if (gameOver || aiCooldown) return;
+
+      const dist = p2.mesh.position.x - p1.mesh.position.x;
+
+      // Move toward or away from P1
+      if (dist > 3) {
+        p2.mesh.position.x -= 0.04;
+      } else if (dist < 1.2) {
+        p2.mesh.position.x += 0.04;
+      }
+
+      // Random Attack Decision
+      if (Math.random() < 0.03) {
+        aiCooldown = true;
+        const rand = Math.random();
+
+        if (dist < 1.8 && rand < 0.4) {
+          performPunch(p2, p1, 'p1-health');
+        } else if (dist < 2.0 && rand < 0.7) {
+          performKick(p2, p1, 'p1-health');
+        } else {
+          performSpecial(p2, -1, 0xffffff, 'projectile');
+        }
+
+        setTimeout(() => { aiCooldown = false; }, 800);
+      }
+    }
+
+    function endGame(msg) {
       gameOver = true;
-      document.getElementById('winner-text').innerText = message;
+      document.getElementById('winner-text').innerText = msg;
       document.getElementById('game-over').style.display = 'block';
     }
 
-    // Timer countdown
+    // Timer
     let timeLeft = 99;
-    const timerInterval = setInterval(() => {
-      if (gameOver) {
-        clearInterval(timerInterval);
-        return;
-      }
+    setInterval(() => {
+      if (gameOver) return;
       timeLeft--;
       document.getElementById('timer').innerText = timeLeft;
       if (timeLeft <= 0) {
-        clearInterval(timerInterval);
         endGame(p1.health > p2.health ? 'PHIL WINS ON TIME!' : 'DOT WINS ON TIME!');
       }
     }, 1000);
 
-    // --- 5. GAME LOOP ---
+    // --- 6. GAME LOOP ---
     function animate() {
       requestAnimationFrame(animate);
 
       if (!gameOver) {
-        // Player 1 Movement
-        if (keys['KeyA'] && p1.mesh.position.x > -8) {
-          p1.mesh.position.x -= 0.08;
+        // Player 1 Block Check (S or ArrowDown)
+        p1.isBlocking = (keys['KeyS'] || keys['ArrowDown']);
+
+        // Player 1 Horizontal Movement (Reduced while blocking)
+        const moveSpeed = p1.isBlocking ? 0.03 : 0.08;
+        if ((keys['KeyA'] || keys['ArrowLeft']) && p1.mesh.position.x > -8) {
+          p1.mesh.position.x -= moveSpeed;
         }
-        if (keys['KeyD'] && p1.mesh.position.x < p2.mesh.position.x - 1.1) {
-          p1.mesh.position.x += 0.08;
+        if ((keys['KeyD'] || keys['ArrowRight']) && p1.mesh.position.x < p2.mesh.position.x - 1.1) {
+          p1.mesh.position.x += moveSpeed;
         }
 
-        // Simple CPU AI for Player 2 (Dot Cotton)
-        const distance = p2.mesh.position.x - p1.mesh.position.x;
-        if (distance > 2) {
-          p2.mesh.position.x -= 0.02; // Walk towards P1
+        // Apply Jump Gravity Physics to P1
+        if (!p1.isGrounded) {
+          p1.mesh.position.y += p1.vy;
+          p1.vy -= 0.01; // Gravity constant
+
+          if (p1.mesh.position.y <= 0) {
+            p1.mesh.position.y = 0;
+            p1.vy = 0;
+            p1.isGrounded = true;
+          }
+        }
+
+        // Run CPU AI
+        updateAI();
+
+        // Update Projectiles
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+          const p = projectiles[i];
+          p.mesh.position.x += p.dir * 0.15;
+          p.mesh.rotation.z += 0.2; // Spin projectile in air
+
+          // Check Hit
+          if (Math.abs(p.mesh.position.x - p.target.mesh.position.x) < 0.8 &&
+              Math.abs(p.mesh.position.y - (p.target.mesh.position.y + 1.0)) < 1.2) {
+            applyDamage(p.target, p.targetEl, 20);
+            scene.remove(p.mesh);
+            projectiles.splice(i, 1);
+            continue;
+          }
+
+          // Offscreen Cleanup
+          if (Math.abs(p.mesh.position.x) > 10) {
+            scene.remove(p.mesh);
+            projectiles.splice(i, 1);
+          }
         }
       }
 
@@ -289,7 +470,7 @@
 
     animate();
 
-    // Responsive window resize
+    // Window Resize
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
