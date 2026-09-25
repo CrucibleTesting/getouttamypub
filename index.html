@@ -109,10 +109,39 @@
       z-index: 20;
       text-align: center;
     }
+
+    /* LANDSCAPE OVERLAY WARNING (MOBILE ONLY) */
+    #portrait-warning {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0, 0, 0, 0.95);
+      color: #ffcc00;
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      text-align: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    @media (orientation: landscape) and (max-height: 600px) and (hover: none) {
+      #portrait-warning {
+        display: flex;
+      }
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
+
+  <div id="portrait-warning">
+    Please rotate your device to portrait mode to play.
+  </div>
 
   <div id="ui">
     <div style="width: 42%;">
@@ -209,12 +238,27 @@
       foot.visible = false;
       group.add(foot);
 
+      // Front Arc Shield for Blocking
+      const arcGeometry = new THREE.RingGeometry(0.8, 1.1, 16, 1, 0, Math.PI * 0.6);
+      const arcMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00aaff,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.8
+      });
+      const shield = new THREE.Mesh(arcGeometry, arcMaterial);
+      shield.position.set(0.6, 1.1, 0);
+      shield.rotation.y = Math.PI / 2;
+      shield.visible = false;
+      group.add(shield);
+
       group.position.x = xPos;
       
       return {
         mesh: group,
         fist: fist,
         foot: foot,
+        shield: shield,
         health: 100,
         isAttacking: false,
         isBlocking: false,
@@ -233,12 +277,11 @@
     // Projectile Pool
     const projectiles = [];
 
-    function spawnProjectile(x, direction, color, type) {
-      const geo = type === 'bottle' ? new THREE.CylinderGeometry(0.12, 0.12, 0.5) : new THREE.CylinderGeometry(0.05, 0.05, 0.4);
-      const mat = new THREE.MeshStandardMaterial({ color, transparent: true, opacity: type === 'bottle' ? 0.75 : 1.0 });
+    function spawnProjectile(x, direction, color) {
+      const geo = new THREE.SphereGeometry(0.2, 8, 8);
+      const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5 });
       const proj = new THREE.Mesh(geo, mat);
-      proj.rotation.z = Math.PI / 2;
-      proj.position.set(x, p1.mesh.position.y + 1.5, 0);
+      proj.position.set(x, 1.2, 0);
       scene.add(proj);
 
       projectiles.push({
@@ -268,8 +311,8 @@
       if (e.code === 'KeyJ' || e.code === 'Space') performPunch(p1, p2, 'p2-health');
       // Kick (K)
       if (e.code === 'KeyK') performKick(p1, p2, 'p2-health');
-      // Special (L) - Bottle Throw
-      if (e.code === 'KeyL') performSpecial(p1, 1, 0x55aa77, 'bottle');
+      // Special (L)
+      if (e.code === 'KeyL') performSpecial(p1, 1, 0xffff00);
     });
 
     window.addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -293,7 +336,7 @@
     bindTouch('btn-block', () => keys['KeyS'] = true, () => keys['KeyS'] = false);
     bindTouch('btn-punch', () => performPunch(p1, p2, 'p2-health'));
     bindTouch('btn-kick', () => performKick(p1, p2, 'p2-health'));
-    bindTouch('btn-special', () => performSpecial(p1, 1, 0x55aa77, 'bottle'));
+    bindTouch('btn-special', () => performSpecial(p1, 1, 0xffff00));
 
     // --- 4. COMBAT ACTIONS ---
     function performPunch(attacker, defender, targetHpEl) {
@@ -342,18 +385,20 @@
       }, 20);
     }
 
-    function performSpecial(attacker, direction, color, type) {
+    function performSpecial(attacker, direction, color) {
       if (attacker.isAttacking || gameOver) return;
       attacker.isAttacking = true;
       
-      spawnProjectile(attacker.mesh.position.x + (direction * 0.8), direction, color, type);
+      spawnProjectile(attacker.mesh.position.x + (direction * 0.8), direction, color);
 
       setTimeout(() => { attacker.isAttacking = false; }, 400);
     }
 
     function applyDamage(target, hpElementId, amount) {
-      const finalAmount = target.isBlocking ? amount * 0.2 : amount;
-      target.health = Math.max(0, target.health - finalAmount);
+      // Complete damage negation if target is blocking
+      if (target.isBlocking) return;
+
+      target.health = Math.max(0, target.health - amount);
       document.getElementById(hpElementId).style.width = target.health + '%';
       target.mesh.position.x += (target === p1 ? -0.2 : 0.2);
 
@@ -369,24 +414,22 @@
 
       const dist = p2.mesh.position.x - p1.mesh.position.x;
 
-      // Move toward or away from P1
       if (dist > 3) {
         p2.mesh.position.x -= 0.04;
       } else if (dist < 1.2) {
         p2.mesh.position.x += 0.04;
       }
 
-      // Random Attack Decision
       if (Math.random() < 0.03) {
         aiCooldown = true;
         const rand = Math.random();
 
-        if (dist < 1.8 && rand < 0.4) {
+        if (dist < 1.8 && rand < 0.35) {
           performPunch(p2, p1, 'p1-health');
-        } else if (dist < 2.0 && rand < 0.7) {
+        } else if (dist < 2.0 && rand < 0.65) {
           performKick(p2, p1, 'p1-health');
         } else {
-          performSpecial(p2, -1, 0xffffff, 'projectile');
+          performSpecial(p2, -1, 0x00ffff);
         }
 
         setTimeout(() => { aiCooldown = false; }, 800);
@@ -415,11 +458,15 @@
       requestAnimationFrame(animate);
 
       if (!gameOver) {
-        // Player 1 Block Check (S or ArrowDown)
-        p1.isBlocking = (keys['KeyS'] || keys['ArrowDown']);
+        // Evaluate Blocking State for Player 1 (S key or Down Arrow)
+        p1.isBlocking = Boolean(keys['KeyS'] || keys['ArrowDown']);
+        p1.shield.visible = p1.isBlocking;
 
-        // Player 1 Horizontal Movement (Reduced while blocking)
-        const moveSpeed = p1.isBlocking ? 0.03 : 0.08;
+        // Player 2 Shield state visibility
+        p2.shield.visible = p2.isBlocking;
+
+        // Player 1 Horizontal Movement
+        const moveSpeed = p1.isBlocking ? 0.02 : 0.08;
         if ((keys['KeyA'] || keys['ArrowLeft']) && p1.mesh.position.x > -8) {
           p1.mesh.position.x -= moveSpeed;
         }
@@ -427,10 +474,10 @@
           p1.mesh.position.x += moveSpeed;
         }
 
-        // Apply Jump Gravity Physics to P1
+        // Apply Jump Gravity Physics
         if (!p1.isGrounded) {
           p1.mesh.position.y += p1.vy;
-          p1.vy -= 0.01; // Gravity constant
+          p1.vy -= 0.01;
 
           if (p1.mesh.position.y <= 0) {
             p1.mesh.position.y = 0;
@@ -439,25 +486,28 @@
           }
         }
 
-        // Run CPU AI
+        // AI Logic
         updateAI();
 
-        // Update Projectiles
+        // Update Projectiles & Handle Block Detection
         for (let i = projectiles.length - 1; i >= 0; i--) {
           const p = projectiles[i];
           p.mesh.position.x += p.dir * 0.15;
-          p.mesh.rotation.z += 0.2; // Spin projectile in air
 
-          // Check Hit
+          // Check Collisions
           if (Math.abs(p.mesh.position.x - p.target.mesh.position.x) < 0.8 &&
-              Math.abs(p.mesh.position.y - (p.target.mesh.position.y + 1.0)) < 1.2) {
-            applyDamage(p.target, p.targetEl, 20);
+              Math.abs(p.mesh.position.y - 1.2) < 1.2) {
+            
+            // If target is actively blocking, absorb projectile completely without taking damage
+            if (!p.target.isBlocking) {
+              applyDamage(p.target, p.targetEl, 20);
+            }
+
             scene.remove(p.mesh);
             projectiles.splice(i, 1);
             continue;
           }
 
-          // Offscreen Cleanup
           if (Math.abs(p.mesh.position.x) > 10) {
             scene.remove(p.mesh);
             projectiles.splice(i, 1);
@@ -470,7 +520,7 @@
 
     animate();
 
-    // Window Resize
+    // Window Resize Handler
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
